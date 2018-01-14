@@ -1,5 +1,8 @@
 #ifndef TEXTURE_PNG_H
 #define TEXTURE_PNG_H
+#include <nds.h>
+#include "fixed.h"
+#include "texture.h"
 
 #define PNGFileSignatureLength 8
 #define	PNGChunkBaseToLength 4
@@ -15,7 +18,7 @@
 enum PNGColorType :			uint8		{ Greyscale = 0, Truecolour = 2, IndexedColour = 3, GreyscaleAlpha = 4,
 										   TruecolourAlpha = 6};
 enum PNGInterlacingType :	uint8		{ None = 0, Adam7 = 1};
-enum PNGChunkType :			uint32		{ IHDR = 1380206665, pHYs = 151013488, sRGB = 21451379, IDAT = 507593801, gAMA = 67125607};
+enum PNGChunkType :			uint32		{ IHDR = 1380206665, pHYs = 1935231088, sRGB = 1111970419, IDAT = 1413563465, gAMA = 1095582055, iCCP = 1346585449, cHRM = 1297238115, IEND = 1145980233};
 enum PNGUnitSpecifier :		uint8		{ unknown = 0, Meter = 1};
 
 typedef struct PNGInfo {
@@ -26,9 +29,11 @@ typedef struct PNGInfo {
 		uint8	bytesPerChannel;
 		PNGColorType pngColorType;
 		PNGInterlacingType pngInterlacingType;
-		real gamma;
+		real gamma = div_int_int(22, 10);
 		
 } PNGInfo; 
+
+Texture* DecodePNG(char* fileContents, uint16 fileLength);
 
 static char* PNGColorTypeAsString(const PNGColorType input){
 
@@ -80,18 +85,27 @@ static char* PNGChunkTypeAsString(const PNGChunkType input){
 	
 		case IHDR:
 			return (char*)"Image Header";
+			
+		case IDAT:
+			return (char*)"Image Data";
+			
+		case IEND:
+			return (char*)"Image End";
 	
 		case pHYs:
 			return (char*)"Physical pixel size";
 		
 		case sRGB:
 			return (char*)"RGB Color Space";
-		
-		case IDAT:
-			return (char*)"Image Data";
 	
 		case gAMA:
 			return (char*)"Image Gamma";
+			
+		case iCCP:
+			return (char*)"ICC Profile";
+			
+		case cHRM:
+			return (char*)"Chromaticities Data";	
 	
 		default:{
 			iprintf("Texture_PNG.h PNGChunkTypeAsString() Error: Default error!\r\n");
@@ -100,18 +114,27 @@ static char* PNGChunkTypeAsString(const PNGChunkType input){
 	}
 }
 
-static inline bool PNGChunkTypeSupported(const PNGChunkType input){
+static inline bool PNGChunkTypeRecognized(const PNGChunkType input){
 
-	if(input == IHDR || input == pHYs || input == sRGB || input == IDAT || input == gAMA)
+	if(input == IHDR || input == IDAT || input == IEND ||
+		   input == pHYs || input == sRGB || input == gAMA ||
+		   input == iCCP || input == cHRM)
 		return true;
 	return false;
 }
 
-static char* PNGUnitySpecifierAsString(const PNGUnitSpecifier input){
+static inline bool PNGChunkTypeSupported(const PNGChunkType input){
+
+	if(input == IHDR || input == IDAT || input == IEND || input == gAMA)
+		return true;
+	return false;
+}
+
+static char* PNGUnitSpecifierAsString(const PNGUnitSpecifier input){
 
 	switch(input){
 	
-		case Unknown:
+		case unknown:
 			return (char*)"Unknown";
 			
 		case Meter:
