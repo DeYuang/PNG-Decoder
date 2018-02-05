@@ -2,29 +2,43 @@
 #include <stdio.h>
 #include "compression.h"
 
-void DEFLATE (char* data){
+char* DEFLATE (char* data){
 
 
-	return;
+	return data;
 }
 
-void INFLATE (char* data){
+char* INFLATE (char* data){
 
-	iprintf("\r\nStarting INFLATE\r\n");
+	iprintf("->Starting INFLATE\r\n");
+	uint16 blockCount = 1;
 	
 	uint8 rawData = data[0];
 	
-	bool final = rawData && 0b00000001;
+	bool isFinalBlock = rawData && 0b00000001;
 	uint8 btype = (rawData && 0b00000110) >> 1;
 	
-	if(final)
-		iprintf("Final Block\r\n");
-	
-	DEFLATECompressionType compressionType = *(DEFLATECompressionType*)&btype;
-	
+	DEFLATECompressionType compressionType = *(DEFLATECompressionType*)&btype;	
 	iprintf("Compression Type: ");
-	DEFLATECompressionTypeAsString(compressionType);
-	iprintf("\r\n\r\n");
+	iprintf(DEFLATECompressionTypeAsString(compressionType));
+	iprintf("\r\n");
+	
+	/*if(isFinalBlock){
+		if(blockCount == 1)
+			iprintf("Single Block\r\n");
+		else*/
+			iprintf("Final Block: %u Total Blocks\r\n", blockCount);
+	//}
+	//else
+	//	iprintf("New Block\r\n");
+	
+	if(compressionType == uncompressed && isFinalBlock){
+		// We don't need to anything here, just return what we were given
+		// minus the first bit
+		//iprintf("\r\n");
+		iprintf("->Stopping INFLATE\r\n");
+		return (char*)(&data+1);
+	}
 	
 /*  if stored with no compression
         skip any remaining bits in current partially processed byte
@@ -48,5 +62,7 @@ void INFLATE (char* data){
             while (not last block)
 	*/
 	
-	return;
+	iprintf("\r\n");
+	
+	return data;
 }

@@ -10,6 +10,8 @@ Texture* DecodePNG(char* fileContents, uint16 fileLength){
 	PNGInfo* pngInfo = (PNGInfo*)malloc(sizeof(PNGInfo));
 	pngInfo->gamma = div_int_int(22, 10);
 	
+	Texture* texture = new Texture();
+	
 	uint8 unknownChunksToDisplay = 4;
 	while(chunkBase < fileLength){
 		//uint32 chunkDataLength = SwapEndian(*(uint32*)&fileContents[chunkBase]);
@@ -44,10 +46,20 @@ Texture* DecodePNG(char* fileContents, uint16 fileLength){
 		
 			if(chunkType == IHDR){
 			
-				pngInfo->imageWidth = SwapEndian(*(uint16*)&fileContents[18]);
-				pngInfo->imageHeight = SwapEndian(*(uint16*)&fileContents[22]);
+				{
+					uint8 char0 = *(uint8*)&fileContents[18];
+					uint8 char1 = *(uint8*)&fileContents[19];
+					uint8 char2 = *(uint8*)&fileContents[22];
+					uint8 char3 = *(uint8*)&fileContents[23];
+					
+					pngInfo->imageWidth = (char0 << 8 | char1);
+					pngInfo->imageHeight = (char2 << 8 | char3);
+				}
+				
 				pngInfo->bytesPerChannel = *(uint8*)&fileContents[24];
 				pngInfo->pngColorType = (PNGColorType)fileContents[25];
+				pngInfo->pngCompressionType = (PNGCompressionType)fileContents[chunkBase+PNGChunkBaseToData+10];
+				pngInfo->pngFilterMethod = (PNGFilterMethod)fileContents[chunkBase+PNGChunkBaseToData+11];
 				pngInfo->pngInterlacingType = (PNGInterlacingType)fileContents[28];
 				
 				//uint16 bitmapWidth = SwapEndian(*(uint16*)&fileContents[18]);
@@ -76,15 +88,6 @@ Texture* DecodePNG(char* fileContents, uint16 fileLength){
 				else
 					iprintf("Aspect ratio: %u:%u\r\n\r\n", pixelPerunitX, pixelPerUnitY);
 			}*/
-			else if(chunkType == IDAT){
-			
-				//uint8 compressionMethod = fileContents[chunkBase+PNGChunkBaseToData];
-				//uint8 flags = fileContents[chunkBase+PNGChunkBaseToData+1];
-				
-				//iprintf("Compression method: %u\r\nFlags: %u\r\n", compressionMethod, flags);
-				
-				INFLATE(&fileContents[chunkBase+PNGChunkBaseToData]);
-			}
 			else if(chunkType == gAMA){
 			
 				uint32 gammaBytes;
@@ -96,9 +99,68 @@ Texture* DecodePNG(char* fileContents, uint16 fileLength){
 				
 					gammaBytes = (char0 << 24 | char1 << 16 | char2 << 8 | char3);
 				}
-				pngInfo->gamma = div_int_int(gammaBytes, 100000);
+				pngInfo->gamma = div_int_fixed(1, div_int_int(gammaBytes, 100000));
 				
-				iprintf("Raw Gamma: %u\r\n", gammaBytes);
+				iprintf("->Raw Gamma: %u\r\n", gammaBytes);
+			}
+			else if(chunkType == IDAT){				
+				if(pngInfo->pngCompressionType == Deflate){
+					char* imageData = INFLATE(&fileContents[chunkBase+PNGChunkBaseToData]);
+					char* imageStoreCurrent = imageData;
+					
+					uint8 sourceBitDepth = pngInfo->bytesPerChannel;
+					uint16 length = pngInfo->imageHeight;
+					uint16 width = pngInfo->imageWidth;
+					uint32 pixelCount = length*width;
+					
+					// Get Free Store space
+					uint32 bmp16StoreSpace = pixelCount * sizeof(uint16);
+					uint16* data = (uint16*)malloc(bmp16StoreSpace);
+					uint16* bmp16StoreCurrent = data;					
+					
+					const uint16 alphaBit = 1 << 15;
+					const uint8 targetBitDepth = 5;
+					uint8 shiftFactor = sourceBitDepth - targetBitDepth;
+					uint16 pixelInScanline = width-1;
+					
+					PNGAdaptiveFilter pngAdaptiveFilter = *(PNGAdaptiveFilter*)&imageData;
+					imageData++;
+					iprintf("->Adaptive Filter:");
+					iprintf(PNGAdaptiveFilterAsString(pngAdaptiveFilter));
+					iprintf("\r\n");
+					
+					/*PNGAdaptiveFilter pngAdaptiveFilter2 = *(PNGAdaptiveFilter*)(&imageData + (width*3));
+					iprintf("->Filter 2:");
+					iprintf(PNGAdaptiveFilterAsString(pngAdaptiveFilter2));
+					iprintf("\r\n");*/
+					
+					while(pixelCount --> 0){
+						uint8 r, g, b;
+						r = (*(uint8*)imageData) >> shiftFactor;
+						g = (*(uint8*)(imageData+1)) >> shiftFactor;
+						b = (*(uint8*)(imageData+2)) >> shiftFactor;
+						*bmp16StoreCurrent++ = (alphaBit | (r << 10)
+						| (g << 5) | b);
+						
+						imageData += 3;
+						if(--pixelInScanline == 0){ 
+							pixelInScanline = width-1;
+							
+							PNGAdaptiveFilter newFilter = *(PNGAdaptiveFilter*)&imageData;
+							
+							if(newFilter != pngAdaptiveFilter){
+								pngAdaptiveFilter = newFilter;
+								iprintf("->New Filter: ");
+								iprintf(PNGAdaptiveFilterAsString(pngAdaptiveFilter));
+								iprintf("\r\n");
+							}
+							imageData++;
+						}
+					}
+					
+					texture->data = (void*)data;
+					texture->dataSize = bmp16StoreSpace;
+				}
 			}
 			else if(chunkType == IEND){
 			
@@ -126,16 +188,25 @@ Texture* DecodePNG(char* fileContents, uint16 fileLength){
 		chunkBase += PNGChunkBaseToNext(chunkDataLength);
 	}
 
-	iprintf("\r\nPNGInfo:\r\nColor Depth: %u BPP\r\nImage Size: %ux%u\r\n", pngInfo->bytesPerChannel, pngInfo->imageWidth, pngInfo->imageHeight);
-	iprintf("Color Type: ");
+	iprintf("\r\nPNGInfo:\r\n->Color Depth: %u BPP\r\n->Image Size: %ux%u\r\n", (pngInfo->bytesPerChannel*3), pngInfo->imageWidth, pngInfo->imageHeight);
+	
+	iprintf("->Color Type: ");
 	iprintf(PNGColorTypeAsString(pngInfo->pngColorType));
-	iprintf("\r\nInterlacing Type: ");
-	iprintf(PNGInterlacingTypeAsString(pngInfo->pngInterlacingType));
-	iprintf("\r\nGamma: ");
+	
+	iprintf("\r\n->Compression: ");
+	iprintf(PNGCompressionTypeAsString(pngInfo->pngCompressionType));
+	
+	//if(pngInfo->pngInterlacingType != None){
+		iprintf("\r\n->Interlacing Type: ");
+		iprintf(PNGInterlacingTypeAsString(pngInfo->pngInterlacingType));
+		iprintf("\r\n->Filter Method: ");
+		iprintf(PNGFilterMethodAsString(pngInfo->pngFilterMethod));
+	//}
+	
+	iprintf("\r\n->Gamma: ");
 	printfixed16r16(pngInfo->gamma);
 	iprintf("\r\n\r\n");
 
-	Texture* texture = new Texture();
 	texture->width = pngInfo->imageWidth;
 	texture->height = pngInfo->imageHeight;
 	//texture->textureType = BMP16;

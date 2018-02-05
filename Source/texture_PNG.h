@@ -17,19 +17,24 @@
 
 enum PNGColorType :			uint8		{ Greyscale = 0, Truecolour = 2, IndexedColour = 3, GreyscaleAlpha = 4,
 										   TruecolourAlpha = 6};
+enum PNGCompressionType :	uint8		{ Deflate = 0 };
 enum PNGInterlacingType :	uint8		{ None = 0, Adam7 = 1};
+enum PNGFilterMethod	 :	uint8		{ Adaptive = 0};
+enum PNGAdaptiveFilter	:	uint8		{ NoFilter = 0, Sub = 1, Up = 2, Average = 3, Paeth = 4};
 enum PNGChunkType :			uint32		{ IHDR = 1380206665, pHYs = 1935231088, sRGB = 1111970419, IDAT = 1413563465, gAMA = 1095582055, iCCP = 1346585449, cHRM = 1297238115, IEND = 1145980233};
-enum PNGUnitSpecifier :		uint8		{ unknown = 0, Meter = 1};
+//enum PNGUnitSpecifier :		uint8		{ unknown = 0, Meter = 1};
 
 typedef struct PNGInfo {
 
 	public:
-		uint16	imageWidth;
-		uint16	imageHeight;
-		uint8	bytesPerChannel;
-		PNGColorType pngColorType;
-		PNGInterlacingType pngInterlacingType;
-		real gamma = div_int_int(22, 10);
+		uint16				imageWidth;
+		uint16				imageHeight;
+		uint8				bytesPerChannel;
+		PNGColorType		pngColorType;
+		PNGCompressionType	pngCompressionType;
+		PNGFilterMethod		pngFilterMethod;
+		PNGInterlacingType	pngInterlacingType;
+		real				gamma;// = div_int_int(22, 10);
 		
 } PNGInfo; 
 
@@ -43,7 +48,7 @@ static char* PNGColorTypeAsString(const PNGColorType input){
 			return (char*)"Greyscale";
 			
 		case Truecolour:
-			return (char*)"Truecolour";
+			return (char*)"TrueColour";
 			
 		case IndexedColour:
 			return (char*)"Indexed Colour";
@@ -56,6 +61,20 @@ static char* PNGColorTypeAsString(const PNGColorType input){
 	
 		default:{
 			iprintf("Texture_PNG.h PNGColorTypeAsString() Error: Default error!\r\n");
+			return (char*)"";
+		}
+	}
+}
+
+static char* PNGCompressionTypeAsString(const PNGCompressionType input){
+
+	switch(input){
+	
+		case Deflate:
+			return (char*)"Deflate";
+	
+		default:{
+			iprintf("Texture_PNG.h PNGCompressionTypeAsString() Error: Default error!\r\n");
 			return (char*)"";
 		}
 	}
@@ -75,6 +94,47 @@ static char* PNGInterlacingTypeAsString(const PNGInterlacingType input){
 		default:{
 			iprintf("Texture_PNG.h PNGInterlacingTypeAsString() Error: Default error!\r\n");
 			return (char*)"";
+		}
+	}
+}
+
+static char* PNGFilterMethodAsString(const PNGFilterMethod input){
+
+	switch(input){
+	
+		case Adaptive:
+			return (char*)"Adaptive";
+	
+		default:{
+			iprintf("Texture_PNG.h PNGFilterMethodAsString() Error: Default error!\r\n");
+			return (char*)"";
+		}
+	}
+}
+
+static char* PNGAdaptiveFilterAsString(const PNGAdaptiveFilter input){
+
+
+	iprintf("(%u) ", (uint8)input);
+	switch(input){
+	
+		case NoFilter:
+			return (char*)"No Filter";
+			
+		case Sub:
+			return (char*)"Sub";
+		
+		case Up:
+			return (char*)"Up";
+		
+		case Average:
+			return (char*)"Average";
+		
+		case Paeth:
+			return (char*)"Paeth";
+	
+		default:{
+			return (char*)"Unknown";
 		}
 	}
 }
@@ -130,7 +190,7 @@ static inline bool PNGChunkTypeSupported(const PNGChunkType input){
 	return false;
 }
 
-static char* PNGUnitSpecifierAsString(const PNGUnitSpecifier input){
+/*static char* PNGUnitSpecifierAsString(const PNGUnitSpecifier input){
 
 	switch(input){
 	
@@ -146,5 +206,5 @@ static char* PNGUnitSpecifierAsString(const PNGUnitSpecifier input){
 			return (char*)"";
 		}
 	}
-}
+}*/
 #endif
